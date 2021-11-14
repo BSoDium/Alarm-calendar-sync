@@ -52,6 +52,7 @@ function main() {
       Logger.log(`Run canceled, you're triggering to many reloads. Please try again in ${jsonConst.timeOutDelay} seconds`);
       // update last run date
       updateLastRun();
+      scriptProperties.setProperty(jsonConst.properties.concurrentRunFlag, '1'); // hand back flag after execution
       return;
     }
     // consume one timeout token

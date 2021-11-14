@@ -122,14 +122,15 @@ function createEvent(targetCalendar, summary, startDate, endDate, description=nu
     location,
     reminders,
     colorId,
-    transparency,
-    extendedProperties: {
-      private: {
-        MD5: '', // not implemented yet
-        generated: true
-      }
-    }
+    transparency
   };
+  // generate digest
+  event.extendedProperties = {
+    private: {
+      MD5: Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, recursiveToString(event)).toString(),
+      generated: true
+    }
+  }
   event = Calendar.Events.insert(event, targetCalendar.getId());
   // retrieve the CalendarEvent object to modify its Origin tag // TODO improve this
   Logger.log(`Successfully created event ${event.getId()}.`);
@@ -158,17 +159,22 @@ function updateEvent(targetCalendar, eventId, summary, startDate, endDate, descr
     location,
     reminders,
     transparency,
-    extendedProperties: {
+  };
+  
+  const digest = Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, recursiveToString(event)).toString();
+  if (digest != gevent.extendedProperties.private.MD5 || gevent.status != 'confirmed') {
+    event.extendedProperties = {
       private: {
-        MD5: '', // not implemented yet
+        MD5: digest,
         generated: true
       }
-    }
-  };
-
-  event = Calendar.Events.update(event, targetCalendar.getId(), gevent.getId());
-  Logger.log(`Successfully updated event ${eventId}.`);
-  return event;
+    };
+    event = Calendar.Events.update(event, targetCalendar.getId(), gevent.getId());
+    Logger.log(`Updated event ${eventId}.`);
+    return event;
+  }
+  Logger.log(`Skipped event ${eventId}, no need to update.`);
+  return gevent;
 }
 
 /**
@@ -192,5 +198,15 @@ function initProperty(key, init) {
     scriptProperties.setProperty(key, init);
   }
   return scriptProperties.getProperty(key);
+}
+
+/**
+ * Recursively convert an object to a string
+ */
+function recursiveToString(object, recurseCount=0) {
+  if (recurseCount > 100) {
+    throw Error('RecursiveToString has detected an infinite recursion, this is definitely not normal. Are you running this on a quantum computer ?');
+  }
+  return object.toString == Object.prototype.toString ? `{${Object.keys(object).map(key => `${key} : ${recursiveToString(object[key], recurseCount + 1)}`)}}` : object.toString();
 }
 
