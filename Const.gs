@@ -3,8 +3,9 @@ const jsonConst = {
   properties: {
     lastRun: 'lastRun',
     timeoutToken: 'TOToken',
-    history: 'eventIds'
+    history: 'eventIds',
+    concurrentRunFlag: 'ccrRunFlg'
   },
-  timeOutThreshold: 1, // tokens
-  timeOutDelay: 2, // seconds
+  timeOutThreshold: 3, // tokens
+  timeOutDelay: 20, // seconds
 }

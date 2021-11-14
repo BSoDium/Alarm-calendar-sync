@@ -9,10 +9,13 @@ function compute(targetCalendar, currentDate, previousId=null) {
   const currentDateEvents = targetCalendar.getEventsForDay(currentDate);
   let lastEvent = previousDateEvents[previousDateEvents.length - 1];
   let firstEvent = currentDateEvents[0];
-  if (lastEvent?.getId() == firstEvent?.getId()) { // detect multi-day events
+  if (lastEvent?.getId() == firstEvent?.getId()) { // detect multi-day events TODO : refactor this to look nicer
     lastEvent = currentDateEvents[0];
     firstEvent = currentDateEvents[1];
-  } else if (firstEvent?.getTag('Origin') == 'AlarmSync') {
+    if (firstEvent?.getTitle() == jsonSettings.event.summary) {
+      firstEvent = currentDateEvents[2];
+    }
+  } else if (firstEvent?.getTitle() == jsonSettings.event.summary) {
     firstEvent = currentDateEvents[1];
   }
 
@@ -30,11 +33,38 @@ function compute(targetCalendar, currentDate, previousId=null) {
 
   let event;
   if (previousId) { // event already present
-    event = updateEvent(targetCalendar, previousId, jsonSettings.event.summary, timestamps.start, timestamps.end, jsonSettings.event.description, "Home");
+    event = updateEvent(
+      targetCalendar, 
+      previousId, 
+      jsonSettings.event.summary, 
+      timestamps.start, 
+      timestamps.end, 
+      jsonSettings.event.description, 
+      "Home", 
+      "transparent",
+      {
+        useDefault: false, 
+        overrides: [
+          {'method': 'popup', 'minutes': 0}
+          ]
+      }
+    );
   } else {
-    event = createEvent(targetCalendar, jsonSettings.event.summary, timestamps.start, timestamps.end, jsonSettings.event.description, "Home", false);
-    event.addPopupReminder(0);
-    event.setColor("1");
+    event = createEvent(
+      targetCalendar, 
+      jsonSettings.event.summary, 
+      timestamps.start, 
+      timestamps.end, 
+      jsonSettings.event.description, 
+      "Home",
+      "transparent",
+      {
+        useDefault: false, 
+        overrides: [
+          {'method': 'popup', 'minutes': 0}
+          ]
+      }
+    );
   }
   return event;
 }
@@ -75,36 +105,70 @@ function getOptimal(timestamps, firstEvent, lastEvent, maxWakeUpDate) {
 /**
  * Create an event on the calendar.
  */
-function createEvent(targetCalendar, summary, startDate, endDate, description=null, location=null, sendInvites=true) {
-  const event = targetCalendar.createEvent(summary,
-    startDate,
-    endDate,
-    {location,
+function createEvent(targetCalendar, summary, startDate, endDate, description=null, location=null, transparency="opaque", reminders = reminders={useDefault: true, overrides: []}, colorId='1') {
+  let event = {
+    start: {
+      dateTime: startDate.toISOString(),
+      timeZone: jsonSettings.timeZone
+    },
+    end: {
+      dateTime: endDate.toISOString(),
+      timeZone: jsonSettings.timeZone
+    },
+    status: 'confirmed',
+    colorId: '1',
+    summary,
     description,
-    sendInvites});
-  event.setTag('Origin', 'AlarmSync');
+    location,
+    reminders,
+    colorId,
+    transparency,
+    extendedProperties: {
+      private: {
+        MD5: '', // not implemented yet
+        generated: true
+      }
+    }
+  };
+  event = Calendar.Events.insert(event, targetCalendar.getId());
+  // retrieve the CalendarEvent object to modify its Origin tag // TODO improve this
+  Logger.log(`Successfully created event ${event.getId()}.`);
   return event;
 }
 
 /**
  * Update an event on the calendar, using its Id.
  */
-function updateEvent(targetCalendar, eventId, summary, startDate, endDate, description=null, location=null) {
-    const event = targetCalendar.getEventById(eventId);
-    if (!targetCalendar.getEventsForDay(event.getStartTime()).map(event => event.getId()).includes(eventId)) { // event deleted
-      {
-        Logger.error(`Failed to update event ${eventId}.`);
-        throw Error("UpdateEvent failed to run.");
+function updateEvent(targetCalendar, eventId, summary, startDate, endDate, description=null, location=null, transparency="opaque", reminders = reminders={useDefault: true, overrides: []}, colorId='1') {
+  const gevent = Calendar.Events.get(targetCalendar.getId(), eventId);
+  let event = {
+    start: {
+      dateTime: startDate.toISOString(),
+      timeZone: jsonSettings.timeZone
+    },
+    end: {
+      dateTime: endDate.toISOString(),
+      timeZone: jsonSettings.timeZone
+    },
+    status: 'confirmed',
+    colorId: '1',
+    summary,
+    description,
+    colorId,
+    location,
+    reminders,
+    transparency,
+    extendedProperties: {
+      private: {
+        MD5: '', // not implemented yet
+        generated: true
       }
     }
-    if (event.getTitle() !== summary)
-      event.setTitle(summary);
-    if (event.getStartTime() !== startDate || event.getEndTime() != endDate)
-      event.setTime(startDate, endDate);
-    if (event.getDescription() !== description)
-      event.setDescription(description);
-    if (event.getLocation() !== location)
-      event.setLocation(location);
+  };
+
+  event = Calendar.Events.update(event, targetCalendar.getId(), gevent.getId());
+  Logger.log(`Successfully updated event ${eventId}.`);
+  return event;
 }
 
 /**
@@ -129,3 +193,4 @@ function initProperty(key, init) {
   }
   return scriptProperties.getProperty(key);
 }
+

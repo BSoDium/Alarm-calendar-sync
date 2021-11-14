@@ -1,5 +1,6 @@
 const jsonSettings = {
   calendarName: "Personal",
+  timeZone: 'Europe/Paris',
   maxWakeUpTime: { // max wake up time when going to bed early (kinda)
     hours: 8,
     minutes: 30
@@ -8,7 +9,7 @@ const jsonSettings = {
     hours: 12,
     minutes: 0
   },
-  daysInAdvance: 10,
+  daysInAdvance: 7,
   targetSleepTime: 7, // hours
   timeBeforeEvent: (eventTitle) => {
     return eventTitle.match(/.*Sport.*/) ? 1.3 : 1
