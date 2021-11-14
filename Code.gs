@@ -68,7 +68,7 @@ function main() {
   // load stored eventIds
   let rawEventIds = initProperty(jsonConst.properties.history, '');
   let eventIds = rawEventIds.split(jsonConst.dbSeparator).filter(i => i);
-  Logger.log(`Event Ids : [${eventIds.map((id) => (`"${id}"`))}]`)
+  // Logger.log(`Event Ids : [${eventIds.map((id) => (`"${id}"`))}]`);
   
   // if the daysInAdvance setting was changed since the last run, perform a full reset
   if (eventIds.length && eventIds.length != jsonSettings.daysInAdvance) {

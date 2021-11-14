@@ -8,15 +8,17 @@ function compute(targetCalendar, currentDate, previousId=null) {
   const previousDateEvents = targetCalendar.getEventsForDay(previousDate);
   const currentDateEvents = targetCalendar.getEventsForDay(currentDate);
   let lastEvent = previousDateEvents[previousDateEvents.length - 1];
-  let firstEvent = currentDateEvents[0];
-  if (lastEvent?.getId() == firstEvent?.getId()) { // detect multi-day events TODO : refactor this to look nicer
+  let firstEventIndex = 0;
+  let firstEvent = currentDateEvents[firstEventIndex];
+
+  if (lastEvent?.getId() == firstEvent?.getId()) { // detect multi-day events
     lastEvent = currentDateEvents[0];
-    firstEvent = currentDateEvents[1];
-    if (firstEvent?.getTitle() == jsonSettings.event.summary) {
-      firstEvent = currentDateEvents[2];
-    }
-  } else if (firstEvent?.getTitle() == jsonSettings.event.summary) {
-    firstEvent = currentDateEvents[1];
+    firstEventIndex = 1;
+    firstEvent = currentDateEvents[firstEventIndex];
+  }
+  while (firstEvent?.getTitle() == jsonSettings.event.summary || firstEvent.isAllDayEvent()) { // don't take alarms into account
+    firstEventIndex++;
+    firstEvent = currentDateEvents[firstEventIndex];
   }
 
   const maxWakeUpDate = new Date(currentDate);
@@ -132,7 +134,6 @@ function createEvent(targetCalendar, summary, startDate, endDate, description=nu
     }
   }
   event = Calendar.Events.insert(event, targetCalendar.getId());
-  // retrieve the CalendarEvent object to modify its Origin tag // TODO improve this
   Logger.log(`Successfully created event ${event.getId()}.`);
   return event;
 }
@@ -201,7 +202,7 @@ function initProperty(key, init) {
 }
 
 /**
- * Recursively convert an object to a string
+ * Recursively convert an object to a string.
  */
 function recursiveToString(object, recurseCount=0) {
   if (recurseCount > 100) {
