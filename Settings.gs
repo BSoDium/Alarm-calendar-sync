@@ -19,4 +19,5 @@ const jsonSettings = {
     summary: "⏰ Wake up",
     description: "🌞 Rise and shine, it's time to get out of bed 🚀"
   },
+  forceUpdate : false
 }
