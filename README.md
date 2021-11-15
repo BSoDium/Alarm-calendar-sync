@@ -30,7 +30,7 @@ Congrats, your alarms are now successfully synced 👏
 ## Settings
 
 Setting|Type|Description
-:------|:---|:----------
+:----|:-------------|:----
 eventCalendarName|string|name of the calendar containing your events (used to schedule your alarms)
 alarmCalendarName|string|name of the calendar which will contain the alarms (can be the same as the previous one)
 timeZone|string|your timezone (you can check your timezone at https://en.wikipedia.org/wiki/List_of_tz_database_time_zones, `TZ database name` column)
