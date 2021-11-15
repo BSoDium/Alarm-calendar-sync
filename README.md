@@ -34,11 +34,11 @@ Setting|Type|Description
 eventCalendarName|string|name of the calendar containing your events (used to schedule your alarms)
 alarmCalendarName|string|name of the calendar which will contain the alarms (can be the same as the previous one)
 timeZone|string|your timezone (you can check your timezone at https://en.wikipedia.org/wiki/List_of_tz_database_time_zones, `TZ database name` column)
-maxWakeUpTime|{hours : unsigned Integer, minutes: unsigned Integer }|max wake up time when going to bed early (no late night events scheduled) - military time format
-absoluteMaxWakeUpTime|{hours : unsigned Integer, minutes: unsigned Integer }|max wake up time when going to bed late (late night events scheduled) - military time format
 daysInAdvance|unsigned Integer|number of days for which the alarms will be constantly synced, starting with the current day
 targetSleepTime|unsigned Integer|optimal sleep time, if no event prevents you from achieving it, and if the maxWakeUpTime is too early for it to be reached, the maxWakeUpTime will be ignored, and the absoluteMaxWakeUpTime will be used instead
-timeBeforeEvent|(eventTitle: string) => Float|duration in hours (positive float) between the first event of the day and the time of waking up. Can depend on the event's title, which is why it is a function
 delayAlarm|signed Integer|time in minutes (signed int) by which each alarm will be delayed
-event|{summary: string, description: string}|event details
 forceUpdate|boolean|disable update skip, usefull if you have updated these settings, but haven't actually changed your calendar (by default, if the calendar hasn't been modified, the event isn't updated for performance reasons)
+maxWakeUpTime|{hours : unsigned Integer, minutes: unsigned Integer }|max wake up time when going to bed early (no late night events scheduled) - military time format
+absoluteMaxWakeUpTime|{hours : unsigned Integer, minutes: unsigned Integer }|max wake up time when going to bed late (late night events scheduled) - military time format
+timeBeforeEvent|(eventTitle: string) => Float|duration in hours (positive float) between the first event of the day and the time of waking up. Can depend on the event's title, which is why it is a function
+event|{summary: string, description: string}|event details
