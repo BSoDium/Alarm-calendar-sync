@@ -25,45 +25,51 @@ function uninstall() {
 /**
  * Create the wake up events for the following jsonSettings.daysInAdvance days.
  */
-function main() {
+async function main(priority=0) {
   const scriptProperties = PropertiesService.getScriptProperties();
 
   // check for concurrent runs
   let concurrentRunFlag = initProperty(jsonConst.properties.concurrentRunFlag, '1'); // init flag as available
-  if (concurrentRunFlag == '0') { // if the flag is already held by another instance of the script
+  if (concurrentRunFlag == '0' && priority == 0) { // if the flag is already held by another instance of the script
     Logger.log('Concurrent run disabled for consistency reasons. Run aborted.')
     return;
+  } else if (priority == 1) { // if the run is marked as high priority, wait
+    await awaitPropertyValue(jsonConst.properties.concurrentRunFlag, '1');
   }
   scriptProperties.setProperty(jsonConst.properties.concurrentRunFlag, '0'); // take flag before execution
   
-  const targetCalendar = CalendarApp.getCalendarsByName(jsonSettings.calendarName)[0];
-  Logger.log(`Working on calendar : ${targetCalendar.getName()} (${targetCalendar.getId()})`);
+  // load up calendars
+  eventCalendar = initCalendar(jsonSettings.eventCalendarName);
+  alarmCalendar = initCalendar(jsonSettings.alarmCalendarName);
+  Logger.log(`Working on calendars : ${eventCalendar.getName()} (${eventCalendar.getId()}) and ${alarmCalendar.getName()} (${eventCalendar.getId()})`);
 
   // avoid DDoSing google calendar
-  let lastRunDate = initProperty(jsonConst.properties.lastRun, new Date().toUTCString());
-  let timeoutToken = initProperty(jsonConst.properties.timeoutToken, jsonConst.timeOutThreshold.toString());
-  function updateLastRun() {
-    lastRunDate = new Date().toUTCString();
-    scriptProperties.setProperty(jsonConst.properties.lastRun, lastRunDate);
-  }
-  if (new Date() - new Date(lastRunDate) < (jsonConst.timeOutDelay * 1000)) { // last run was less than timeOutDelay seconds ago
-    if (parseInt(timeoutToken) <= 0) {
-      // out of tokens
-      Logger.log(`Run canceled, you're triggering to many reloads. Please try again in ${jsonConst.timeOutDelay} seconds`);
-      // update last run date
-      updateLastRun();
-      scriptProperties.setProperty(jsonConst.properties.concurrentRunFlag, '1'); // hand back flag after execution
-      return;
+  if (priority == 0) {
+    let lastRunDate = initProperty(jsonConst.properties.lastRun, new Date().toUTCString());
+    let timeoutToken = initProperty(jsonConst.properties.timeoutToken, jsonConst.timeOutThreshold.toString());
+    function updateLastRun() {
+      lastRunDate = new Date().toUTCString();
+      scriptProperties.setProperty(jsonConst.properties.lastRun, lastRunDate);
     }
-    // consume one timeout token
-    timeoutToken = (parseInt(timeoutToken) - 1).toString();
-    scriptProperties.setProperty(jsonConst.properties.timeoutToken, timeoutToken);
-    Logger.log(`timeout tokens remaining : ${timeoutToken}`); // remove this in production
-  } else {
-    // reset the timeout token count
-    scriptProperties.setProperty(jsonConst.properties.timeoutToken, jsonConst.timeOutThreshold.toString());
+    if (new Date() - new Date(lastRunDate) < (jsonConst.timeOutDelay * 1000)) { // last run was less than timeOutDelay seconds ago
+      if (parseInt(timeoutToken) <= 0) {
+        // out of tokens
+        Logger.log(`Run canceled, you're triggering to many reloads. Please try again in ${jsonConst.timeOutDelay} seconds`);
+        // update last run date
+        updateLastRun();
+        scriptProperties.setProperty(jsonConst.properties.concurrentRunFlag, '1'); // hand back flag after execution
+        return;
+      }
+      // consume one timeout token
+      timeoutToken = (parseInt(timeoutToken) - 1).toString();
+      scriptProperties.setProperty(jsonConst.properties.timeoutToken, timeoutToken);
+      Logger.log(`timeout tokens remaining : ${timeoutToken}`); // remove this in production
+    } else {
+      // reset the timeout token count
+      scriptProperties.setProperty(jsonConst.properties.timeoutToken, jsonConst.timeOutThreshold.toString());
+    }
+    updateLastRun();
   }
-  updateLastRun();
 
   // load stored eventIds
   let rawEventIds = initProperty(jsonConst.properties.history, '');
@@ -82,7 +88,7 @@ function main() {
   // update / create events for the next jsonSettings.daysInAdvance days
   // try {
     for (let i = 0; i < jsonSettings.daysInAdvance; i++) {
-      const event = compute(targetCalendar, currentDate, eventIds[i] || null);
+      const event = compute(currentDate, eventIds[i] || null);
       if (!eventIds[i]) {
         eventIds.push(event.getId());
       }
@@ -103,7 +109,7 @@ function main() {
 
 
 /**
- * Delete the events whose ids are provided in idArray.
+ * Delete the events whose ids are provided in idArray from the target calendar.
  */
 function deleteByIds(targetCalendar, idArray) {
   idArray.forEach((id) => {
@@ -124,15 +130,16 @@ function deleteByIds(targetCalendar, idArray) {
  * 
  */
 function midnightReset(keepOldEvents=true) {
-  const targetCalendar = CalendarApp.getCalendarsByName(jsonSettings.calendarName)[0];
+  // load up alarm calendar
+  alarmCalendar = initCalendar(jsonSettings.alarmCalendarName);
   let rawEventIds = initProperty(jsonConst.properties.history, '');
   let eventIds = rawEventIds.split(jsonConst.dbSeparator).filter(i => i);
   Logger.log("Deleting synchonized events.");
-  deleteByIds(targetCalendar, eventIds.slice(keepOldEvents ? 1 : 0));
+  deleteByIds(alarmCalendar, eventIds.slice(keepOldEvents ? 1 : 0));
   Logger.log("Destroying event database.");
   resetEventIds();
   Logger.log("Restarting.")
-  main();
+  main(1); // run with priority of 1 (high)
 }
 
 /**
@@ -143,6 +150,10 @@ function resetEventIds() {
   scriptProperties.setProperty(jsonConst.properties.history, '');
 }
 
+/**
+ * Reset the concurrent run flag, use if the previous script 
+ * was terminated without handing back its token.
+ */
 function resetConcurrentRunFlag() {
   const scriptProperties = PropertiesService.getScriptProperties();
   scriptProperties.setProperty(jsonConst.properties.concurrentRunFlag, '1');

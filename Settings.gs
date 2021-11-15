@@ -1,5 +1,6 @@
 const jsonSettings = {
-  calendarName: "Personal",
+  eventCalendarName: "Personal",
+  alarmCalendarName: "Alarms",
   timeZone: 'Europe/Paris',
   maxWakeUpTime: { // max wake up time when going to bed early (kinda)
     hours: 8,

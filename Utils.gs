@@ -1,11 +1,15 @@
+let eventCalendar;
+let alarmCalendar;
+
+
 /**
  * Compute and create the wake up event associated with the provided date.
  */
-function compute(targetCalendar, currentDate, previousId=null) {
+function compute(currentDate, previousId=null) {
   let previousDate = new Date(currentDate); 
   previousDate.setDate(previousDate.getDate() - 1);
-  const previousDateEvents = targetCalendar.getEventsForDay(previousDate);
-  const currentDateEvents = targetCalendar.getEventsForDay(currentDate);
+  const previousDateEvents = eventCalendar.getEventsForDay(previousDate);
+  const currentDateEvents = eventCalendar.getEventsForDay(currentDate);
   let lastPreviousEvent = previousDateEvents[previousDateEvents.length - 1];
   let firstEventOfDayIndex = 0;
   let firstEventOfDay = currentDateEvents[firstEventOfDayIndex];
@@ -29,11 +33,9 @@ function compute(targetCalendar, currentDate, previousId=null) {
     end: null,
   };
 
-  
-
   let event;
   if (previousId) { // event already present
-    const gevent = Calendar.Events.get(targetCalendar.getId(), previousId);
+    const gevent = Calendar.Events.get(alarmCalendar.getId(), previousId);
 
     // calculate optimal wake up time if necessary
     const recorded = {
@@ -43,7 +45,6 @@ function compute(targetCalendar, currentDate, previousId=null) {
     if (recorded.endOfPrevious != lastPreviousEvent.getStartTime().toISOString() || recorded.startOfDay != firstEventOfDay.getStartTime().toISOString() || jsonSettings.forceUpdate) {
       timestamps = getOptimal(timestamps, firstEventOfDay, lastPreviousEvent, maxWakeUpDate);
       event = updateEvent(
-        targetCalendar,
         lastPreviousEvent,
         firstEventOfDay,
         previousId,
@@ -68,7 +69,6 @@ function compute(targetCalendar, currentDate, previousId=null) {
     // calculate optimal wake up time
     timestamps = getOptimal(timestamps, firstEventOfDay, lastPreviousEvent, maxWakeUpDate);
     event = createEvent(
-      targetCalendar,
       lastPreviousEvent,
       firstEventOfDay,
       jsonSettings.event.summary, 
@@ -123,7 +123,7 @@ function getOptimal(timestamps, firstEventOfDay, lastPreviousEvent, maxWakeUpDat
 /**
  * Create an event on the calendar.
  */
-function createEvent(targetCalendar, lastPreviousEvent, firstEventOfDay, summary, startDate, endDate, description=null, location=null, transparency="opaque", reminders={useDefault: true, overrides: []}, colorId='1') {
+function createEvent(lastPreviousEvent, firstEventOfDay, summary, startDate, endDate, description=null, location=null, transparency="opaque", reminders={useDefault: true, overrides: []}, colorId='0') {
   let event = {
     start: {
       dateTime: startDate.toISOString(),
@@ -134,7 +134,7 @@ function createEvent(targetCalendar, lastPreviousEvent, firstEventOfDay, summary
       timeZone: jsonSettings.timeZone
     },
     status: 'confirmed',
-    colorId: '1',
+    colorId,
     summary,
     description,
     location,
@@ -151,7 +151,7 @@ function createEvent(targetCalendar, lastPreviousEvent, firstEventOfDay, summary
       startOfDay: firstEventOfDay.getStartTime().toISOString()
     }
   }
-  event = Calendar.Events.insert(event, targetCalendar.getId());
+  event = Calendar.Events.insert(event, alarmCalendar.getId());
   Logger.log(`Created event ${event.getId()}.`);
   return event;
 }
@@ -159,7 +159,7 @@ function createEvent(targetCalendar, lastPreviousEvent, firstEventOfDay, summary
 /**
  * Update an event on the calendar, using its Id.
  */
-function updateEvent(targetCalendar, lastPreviousEvent, firstEventOfDay, eventId, gevent, summary, startDate, endDate, description=null, location=null, transparency="opaque", reminders={useDefault: true, overrides: []}, colorId='1') {
+function updateEvent(lastPreviousEvent, firstEventOfDay, eventId, gevent, summary, startDate, endDate, description=null, location=null, transparency="opaque", reminders={useDefault: true, overrides: []}, colorId='0') {
   let event = {
     start: {
       dateTime: startDate.toISOString(),
@@ -170,7 +170,7 @@ function updateEvent(targetCalendar, lastPreviousEvent, firstEventOfDay, eventId
       timeZone: jsonSettings.timeZone
     },
     status: 'confirmed',
-    colorId: '1',
+    colorId,
     summary,
     description,
     colorId,
@@ -189,7 +189,7 @@ function updateEvent(targetCalendar, lastPreviousEvent, firstEventOfDay, eventId
         startOfDay: firstEventOfDay.getStartTime().toISOString()
       }
     };
-    event = Calendar.Events.update(event, targetCalendar.getId(), gevent.getId());
+    event = Calendar.Events.update(event, alarmCalendar.getId(), gevent.getId());
     Logger.log(`Updated event ${eventId}.`);
     return event;
   }
@@ -221,6 +221,21 @@ function initProperty(key, init) {
 }
 
 /**
+ * Create a calendar if needed, if not just return the existing one.
+ */
+function initCalendar(name, options=null) {
+  let cal = CalendarApp.getCalendarsByName(name)[0];
+  if (!cal) {
+    return CalendarApp.createCalendar(name, options);
+  }
+  return cal;
+}
+
+function test() {
+  initCalendar('eee');
+}
+
+/**
  * Recursively convert an object to a string.
  */
 function recursiveToString(object, recurseCount=0) {
@@ -230,3 +245,25 @@ function recursiveToString(object, recurseCount=0) {
   return object.toString == Object.prototype.toString ? `{${Object.keys(object).map(key => `${key} : ${recursiveToString(object[key], recurseCount + 1)}`)}}` : object.toString();
 }
 
+/**
+ * Wait for a property's value to equal the provided value.
+ */
+async function awaitPropertyValue(key, value, timeout=100) {
+  const scriptProperties = PropertiesService.getScriptProperties();
+  Logger.log(`Waiting for property ${key} to equal ${value}.`)
+  while (scriptProperties.getProperty(key) != value) {
+    await sleep(1000);
+    timeout--;
+    if (timeout <= 0) {
+      throw Error(`Reached timeout when waiting for property ${key} to equal ${value}`);
+    }
+  }
+  Logger.log('Condition verified.');
+}
+
+/**
+ * Do I seriously need to comment on this one ?
+ */
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
