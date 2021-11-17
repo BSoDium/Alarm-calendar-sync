@@ -10,29 +10,30 @@ function compute(currentDate, previousId=null) {
   previousDate.setDate(previousDate.getDate() - 1);
   const previousDateEvents = eventCalendar.getEventsForDay(previousDate);
   const currentDateEvents = eventCalendar.getEventsForDay(currentDate);
-  let lastPreviousEvent = previousDateEvents[previousDateEvents.length - 1];
-  let firstEventOfDayIndex = 0;
-  let firstEventOfDay = currentDateEvents[firstEventOfDayIndex];
+  // lastPreviousEvent : event of the previous day with the highest end date
+  let lastPreviousEvent = previousDateEvents[0];
+  previousDateEvents.forEach((event) => {
+    if (event.getEndTime() > lastPreviousEvent.getEndTime() 
+        && !(event.getTitle() == jsonSettings.event.summary || event.isAllDayEvent()))
+      lastPreviousEvent = event;
+  })
 
-  if (lastPreviousEvent?.getId() == firstEventOfDay?.getId()) { // detect multi-day events
-    lastPreviousEvent = currentDateEvents[0];
-    firstEventOfDayIndex = 1;
-    firstEventOfDay = currentDateEvents[firstEventOfDayIndex];
-  }
-  while (firstEventOfDay?.getTitle() == jsonSettings.event.summary || firstEventOfDay.isAllDayEvent()) { // don't take alarms into account
-    firstEventOfDayIndex++;
-    firstEventOfDay = currentDateEvents[firstEventOfDayIndex];
-  }
+  // firstEventOfDay : event of the current day with the lowest start date in the current day
+  let firstEventOfDay = currentDateEvents[currentDateEvents.length - 1];
+  currentDateEvents.forEach((event) => {
+    if (event.getStartTime() < firstEventOfDay.getStartTime() 
+        && event.getStartTime().getDate() == currentDate.getDate() 
+        && !(event.getTitle() == jsonSettings.event.summary || event.isAllDayEvent()))
+      firstEventOfDay = event;
+  })
 
   const maxWakeUpDate = new Date(currentDate);
   maxWakeUpDate.setHours(jsonSettings.maxWakeUpTime.hours);
   maxWakeUpDate.setMinutes(jsonSettings.maxWakeUpTime.minutes);
+  maxWakeUpDate.setSeconds(0);
+  maxWakeUpDate.setMilliseconds(0);
 
-  let timestamps = {
-    start: firstEventOfDay?.getStartTime() || new Date(`${currentDate.getFullYear()}-${currentDate.getMonth}-${currentDate.getDate()}T${jsonSettings.maxWakeUpTime.hours}:${jsonSettings.maxWakeUpTime.minutes}:00`),
-    end: null,
-  };
-
+  let timestamps;
   let event;
   if (previousId) { // event already present
     const gevent = Calendar.Events.get(alarmCalendar.getId(), previousId);
@@ -42,8 +43,10 @@ function compute(currentDate, previousId=null) {
       endOfPrevious : gevent.extendedProperties.private.endOfPrevious,
       startOfDay : gevent.extendedProperties.private.startOfDay
     }
-    if (recorded.endOfPrevious != lastPreviousEvent.getStartTime().toISOString() || recorded.startOfDay != firstEventOfDay.getStartTime().toISOString() || jsonSettings.forceUpdate) {
-      timestamps = getOptimal(timestamps, firstEventOfDay, lastPreviousEvent, maxWakeUpDate);
+    if (recorded.endOfPrevious != (lastPreviousEvent?.getStartTime().toISOString() || 'undefined') 
+        || recorded.startOfDay != (firstEventOfDay?.getStartTime().toISOString() || 'undefined') 
+        || jsonSettings.forceUpdate) {
+      timestamps = getOptimal(firstEventOfDay, lastPreviousEvent, maxWakeUpDate);
       event = updateEvent(
         lastPreviousEvent,
         firstEventOfDay,
@@ -67,7 +70,7 @@ function compute(currentDate, previousId=null) {
     
   } else {
     // calculate optimal wake up time
-    timestamps = getOptimal(timestamps, firstEventOfDay, lastPreviousEvent, maxWakeUpDate);
+    timestamps = getOptimal(firstEventOfDay, lastPreviousEvent, maxWakeUpDate);
     event = createEvent(
       lastPreviousEvent,
       firstEventOfDay,
@@ -90,30 +93,41 @@ function compute(currentDate, previousId=null) {
 /**
  * Get the optimal timestamps for a day's wake up event.
  */
-function getOptimal(timestamps, firstEventOfDay, lastPreviousEvent, maxWakeUpDate) {
-  const absoluteMaxWakeUpTime = new Date(firstEventOfDay.getStartTime());
-  absoluteMaxWakeUpTime.setHours(jsonSettings.absoluteMaxWakeUpTime.hours);
-  absoluteMaxWakeUpTime.setMinutes(jsonSettings.absoluteMaxWakeUpTime.minutes);
+function getOptimal(firstEventOfDay, lastPreviousEvent, maxWakeUpDate) {
+  // get absoluteMaxWakeUpDate as a variable
+  const absoluteMaxWakeUpDate = new Date(maxWakeUpDate);
+  absoluteMaxWakeUpDate.setHours(jsonSettings.absoluteMaxWakeUpTime.hours);
+  absoluteMaxWakeUpDate.setMinutes(jsonSettings.absoluteMaxWakeUpTime.minutes);
+  absoluteMaxWakeUpDate.setSeconds(0);
+  absoluteMaxWakeUpDate.setMilliseconds(0);
   
-  if (timestamps.start > maxWakeUpDate) { // wake up time is over maximum
-    const timeSlept = (maxWakeUpDate - lastPreviousEvent?.getEndTime()) / 1000 / 60 / 60;
+  const busyStart = firstEventOfDay?.getStartTime();
+  // apply timeBeforeEvent to first event start time
+  busyStart?.setHours(busyStart?.getHours() - Math.trunc(jsonSettings.timeBeforeEvent(firstEventOfDay?.getTitle() || "")));
+  busyStart?.setMinutes(busyStart?.getMinutes() - jsonSettings.timeBeforeEvent(firstEventOfDay?.getTitle() || "") % 1 * 60);
 
-    if (timeSlept && timeSlept < jsonSettings.targetSleepTime) { // if the time slept is insufficient, override maximum wake up time constraint to match minimum between optimal sleep time 
-                                                                 // and first event of the day
-      timestamps.start.setHours(lastPreviousEvent.getEndTime().getHours() + Math.trunc(jsonSettings.targetSleepTime));
-      timestamps.start.setMinutes(lastPreviousEvent.getEndTime().getMinutes() + jsonSettings.targetSleepTime % 1 * 60);
-      timestamps.start = new Date(Math.min(Math.min(timestamps.start, firstEventOfDay.getStartTime()), absoluteMaxWakeUpTime));
+  let timestamps = {
+    start: busyStart || new Date(maxWakeUpDate),
+    end: null,
+  };
+  
+  if (timestamps.start > maxWakeUpDate) { // previously calculated wake up time is over maximum
+    const timeSlept = ((maxWakeUpDate - lastPreviousEvent?.getEndTime()) / 1000 / 60 / 60 || jsonSettings.targetSleepTime);
+
+    if (timeSlept < jsonSettings.targetSleepTime) { // if the time slept is insufficient, override maximum wake up time constraint to match minimum between optimal sleep time,
+                                                    // first event of the day and absolute maximum wake up time
+      const idealWakeUpTime = new Date(timestamps.start);
+      idealWakeUpTime.setHours(lastPreviousEvent.getEndTime().getHours() + Math.trunc(jsonSettings.targetSleepTime));
+      idealWakeUpTime.setMinutes(lastPreviousEvent.getEndTime().getMinutes() + jsonSettings.targetSleepTime % 1 * 60);
+
+      timestamps.start = new Date(Math.min(Math.min(idealWakeUpTime, timestamps.start), absoluteMaxWakeUpDate));
     } else { // else set the wake up time to the max allowed
-      timestamps.start.setHours(jsonSettings.maxWakeUpTime.hours);
-      timestamps.start.setMinutes(jsonSettings.maxWakeUpTime.minutes);
+      timestamps.start = new Date(maxWakeUpDate);
     }
-  } else {
-    timestamps.start.setHours(timestamps.start.getHours() - Math.trunc(jsonSettings.timeBeforeEvent(firstEventOfDay.getTitle())));
-    timestamps.start.setMinutes(timestamps.start.getMinutes() - jsonSettings.timeBeforeEvent(firstEventOfDay.getTitle()) % 1 * 60);
   }
   // apply delay
   timestamps.start.setMinutes(timestamps.start.getMinutes() + jsonSettings.delayAlarm);
-  // copy to end date, with a 25 minutes duration (minimum for macrodroid to work)
+  // copy to end date, with a 25 minutes duration (minimum for macrodroid to detect the event)
   timestamps.end = new Date(timestamps.start);
   timestamps.end.setMinutes(timestamps.start.getMinutes() + 25);
   return timestamps;
@@ -147,8 +161,8 @@ function createEvent(lastPreviousEvent, firstEventOfDay, summary, startDate, end
     private: {
       MD5: Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, recursiveToString(event)).toString(),
       generated: true,
-      endOfPrevious: lastPreviousEvent.getStartTime().toISOString(),
-      startOfDay: firstEventOfDay.getStartTime().toISOString()
+      endOfPrevious: lastPreviousEvent?.getStartTime().toISOString() || 'undefined',
+      startOfDay: firstEventOfDay?.getStartTime().toISOString() || 'undefined'
     }
   }
   event = Calendar.Events.insert(event, alarmCalendar.getId());
@@ -185,8 +199,8 @@ function updateEvent(lastPreviousEvent, firstEventOfDay, eventId, gevent, summar
       private: {
         MD5: digest,
         generated: true,
-        endOfPrevious: lastPreviousEvent.getStartTime().toISOString(),
-        startOfDay: firstEventOfDay.getStartTime().toISOString()
+        endOfPrevious: lastPreviousEvent?.getStartTime().toISOString() || 'undefined',
+        startOfDay: firstEventOfDay?.getStartTime().toISOString() || 'undefined'
       }
     };
     event = Calendar.Events.update(event, alarmCalendar.getId(), gevent.getId());
@@ -226,6 +240,7 @@ function initProperty(key, init) {
 function initCalendar(name, options=null) {
   let cal = CalendarApp.getCalendarsByName(name)[0];
   if (!cal) {
+    Logger.log(`Creating calendar "${name}"`)
     return CalendarApp.createCalendar(name, options);
   }
   return cal;

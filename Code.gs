@@ -7,7 +7,11 @@ function install() {
   const resetDate = new Date();
   resetDate.setHours(24, 0, 0, 0);
 
-  ScriptApp.newTrigger("main").forUserCalendar(Session.getEffectiveUser().getEmail()).onEventUpdated().create();
+  eventCalendar = initCalendar(jsonSettings.eventCalendarName);
+  alarmCalendar = initCalendar(jsonSettings.alarmCalendarName);
+
+  ScriptApp.newTrigger("main").forUserCalendar(eventCalendar.getId()).onEventUpdated().create();
+  ScriptApp.newTrigger("main").forUserCalendar(alarmCalendar.getId()).onEventUpdated().create();
   ScriptApp.newTrigger("main").timeBased().after(1000).create();
   ScriptApp.newTrigger("midnightReset").timeBased().everyDays(1).create();
   ScriptApp.newTrigger("midnightReset").timeBased().at(resetDate).create();
@@ -86,7 +90,7 @@ async function main(priority=0) {
   let currentDate = new Date();
 
   // update / create events for the next jsonSettings.daysInAdvance days
-  // try {
+  try {
     for (let i = 0; i < jsonSettings.daysInAdvance; i++) {
       const event = compute(currentDate, eventIds[i] || null);
       if (!eventIds[i]) {
@@ -94,12 +98,12 @@ async function main(priority=0) {
       }
       currentDate.setDate(currentDate.getDate() + 1);
     }
-  // } catch (e) {
-  //   Logger.log("An exception was encountered, terminating run.")
-  //   scriptProperties.setProperty(jsonConst.properties.concurrentRunFlag, '1'); // hand back flag after execution
-  //   midnightReset(false);
-  //   return;
-  // }
+  } catch (e) {
+    Logger.log("An exception was encountered, terminating run.")
+    Logger.log(e.msg);
+    scriptProperties.setProperty(jsonConst.properties.concurrentRunFlag, '1'); // hand back flag after execution
+    return;
+  }
 
   rawEventIds = eventIds.join(jsonConst.dbSeparator);
   scriptProperties.setProperty(jsonConst.properties.history, rawEventIds);
