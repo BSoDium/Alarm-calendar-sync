@@ -12,9 +12,8 @@ function install() {
 
   ScriptApp.newTrigger("main").forUserCalendar(eventCalendar.getId()).onEventUpdated().create();
   ScriptApp.newTrigger("main").forUserCalendar(alarmCalendar.getId()).onEventUpdated().create();
-  ScriptApp.newTrigger("main").timeBased().after(1000).create();
-  ScriptApp.newTrigger("midnightReset").timeBased().everyDays(1).create();
-  ScriptApp.newTrigger("midnightReset").timeBased().at(resetDate).create();
+  ScriptApp.newTrigger("main").timeBased().after(1).create();
+  ScriptApp.newTrigger("midnightReset").timeBased().atHour(0).everyDays(1).create();
   Logger.log("Installation complete.");
 }
 
