@@ -10,6 +10,7 @@ function compute(currentDate, previousId=null) {
   previousDate.setDate(previousDate.getDate() - 1);
   const previousDateEvents = eventCalendar.getEventsForDay(previousDate);
   const currentDateEvents = eventCalendar.getEventsForDay(currentDate);
+  
   // lastPreviousEvent : event of the previous day with the highest end date
   let lastPreviousEvent = previousDateEvents[0];
   previousDateEvents.forEach((event) => {
@@ -112,7 +113,7 @@ function getOptimal(firstEventOfDay, lastPreviousEvent, maxWakeUpDate) {
   };
   
   if (timestamps.start > maxWakeUpDate) { // previously calculated wake up time is over maximum
-    const timeSlept = ((maxWakeUpDate - lastPreviousEvent?.getEndTime()) / 1000 / 60 / 60 || jsonSettings.targetSleepTime);
+    const timeSlept = lastPreviousEvent?.getEndTime() ? ((maxWakeUpDate - lastPreviousEvent?.getEndTime()) / 1000 / 60 / 60) : jsonSettings.targetSleepTime;
 
     if (timeSlept < jsonSettings.targetSleepTime) { // if the time slept is insufficient, override maximum wake up time constraint to match minimum between optimal sleep time,
                                                     // first event of the day and absolute maximum wake up time

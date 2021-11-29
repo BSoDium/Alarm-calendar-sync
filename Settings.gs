@@ -19,7 +19,7 @@ const jsonSettings = {
     return eventTitle.match(/.*Sport.*/) ? 1.3 : 1
   },
   event: {
-    summary: "⏰ Wake up",
-    description: "🌞 Rise and shine, it's time to get out of bed !"
+    summary: "🔔 Wake up",
+    description: "⏰ Rise and shine, it's time to get out of bed !"
   },
 }

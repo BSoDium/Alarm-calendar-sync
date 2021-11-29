@@ -13,7 +13,7 @@ function install() {
   ScriptApp.newTrigger("main").forUserCalendar(eventCalendar.getId()).onEventUpdated().create();
   ScriptApp.newTrigger("main").forUserCalendar(alarmCalendar.getId()).onEventUpdated().create();
   ScriptApp.newTrigger("main").timeBased().after(1).create();
-  ScriptApp.newTrigger("midnightReset").timeBased().atHour(0).everyDays(1).create();
+  ScriptApp.newTrigger("midnightReset").timeBased().atHour(0).nearMinute(0).everyDays(1).create();
   Logger.log("Installation complete.");
 }
 
@@ -40,6 +40,22 @@ async function main(priority=0) {
     await awaitPropertyValue(jsonConst.properties.concurrentRunFlag, '1');
   }
   scriptProperties.setProperty(jsonConst.properties.concurrentRunFlag, '0'); // take flag before execution
+  
+  // if no reset was run today until now, run it now
+  let lastReset = scriptProperties.getProperty(jsonConst.properties.lastReset);
+  if (lastReset && (new Date(lastReset).getDate() != new Date().getDate())) {
+    midnightReset();
+    // delete existing midnightReset trigger
+    const triggers = ScriptApp.getProjectTriggers();
+    for (let i = 0; i < triggers.length; i++) {
+      if (triggers[i].getHandlerFunction() == "midnightReset") {
+        ScriptApp.deleteTrigger(triggers[i]);
+      }
+    }
+    // recreate trigger
+    ScriptApp.newTrigger("midnightReset").timeBased().atHour(0).nearMinute(0).everyDays(1).create();
+    return;
+  }
   
   // load up calendars
   eventCalendar = initCalendar(jsonSettings.eventCalendarName);
@@ -143,6 +159,9 @@ function midnightReset(keepOldEvents=true) {
   resetEventIds();
   Logger.log("Restarting.")
   main(1); // run with priority of 1 (high)
+
+  // save last reset time
+  initProperty(jsonConst.properties.lastReset, new Date().toISOString());
 }
 
 /**
