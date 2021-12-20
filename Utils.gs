@@ -12,17 +12,21 @@ function compute(currentDate, previousId=null) {
   const currentDateEvents = eventCalendar.getEventsForDay(currentDate);
   
   // lastPreviousEvent : event of the previous day with the highest end date
-  let lastPreviousEvent = previousDateEvents[0];
+  let lastPreviousEvent = isEventShortEnough(previousDateEvents[0]) ? previousDateEvents[0] : null;
   previousDateEvents.forEach((event) => {
-    if (event.getEndTime() > lastPreviousEvent.getEndTime() 
+    if (lastPreviousEvent
+        && isEventShortEnough(event)
+        && event.getEndTime() > lastPreviousEvent.getEndTime() 
         && !(event.getTitle() == jsonSettings.event.summary || event.isAllDayEvent()))
       lastPreviousEvent = event;
   })
 
   // firstEventOfDay : event of the current day with the lowest start date in the current day
-  let firstEventOfDay = currentDateEvents[currentDateEvents.length - 1];
+  let firstEventOfDay = isEventShortEnough(currentDateEvents[currentDateEvents.length - 1]) ? currentDateEvents[currentDateEvents.length - 1] : null;
   currentDateEvents.forEach((event) => {
-    if (event.getStartTime() < firstEventOfDay.getStartTime() 
+    if (firstEventOfDay
+        && isEventShortEnough(event)
+        && event.getStartTime() < firstEventOfDay.getStartTime() 
         && event.getStartTime().getDate() == currentDate.getDate() 
         && !(event.getTitle() == jsonSettings.event.summary || event.isAllDayEvent()))
       firstEventOfDay = event;
@@ -267,8 +271,9 @@ function recursiveToString(object, recurseCount=0) {
 async function awaitPropertyValue(key, value, timeout=100) {
   const scriptProperties = PropertiesService.getScriptProperties();
   Logger.log(`Waiting for property ${key} to equal ${value}.`)
+  Logger.log(`"${scriptProperties.getProperty(key)}"   "${value}"`)
   while (scriptProperties.getProperty(key) != value) {
-    await sleep(1000);
+    await sleep(1000); // that does not seem to work
     timeout--;
     if (timeout <= 0) {
       throw Error(`Reached timeout when waiting for property ${key} to equal ${value}`);
@@ -282,4 +287,11 @@ async function awaitPropertyValue(key, value, timeout=100) {
  */
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Is the event shorter than a day ?
+ */
+function isEventShortEnough(event) {
+  return event ? ((event.getEndTime() - event.getStartTime()) / 1000 / 60 / 60) < 24 : true;
 }

@@ -44,6 +44,7 @@ async function main(priority=0) {
   // if no reset was run today until now, run it now
   let lastReset = scriptProperties.getProperty(jsonConst.properties.lastReset);
   if (lastReset && (new Date(lastReset).getDate() != new Date().getDate())) {
+    scriptProperties.setProperty(jsonConst.properties.concurrentRunFlag, '1'); // hand back flag after execution
     midnightReset();
     // delete existing midnightReset trigger
     const triggers = ScriptApp.getProjectTriggers();
@@ -158,10 +159,12 @@ function midnightReset(keepOldEvents=true) {
   Logger.log("Destroying event database.");
   resetEventIds();
   Logger.log("Restarting.")
-  main(1); // run with priority of 1 (high)
-
   // save last reset time
-  initProperty(jsonConst.properties.lastReset, new Date().toISOString());
+  const scriptProperties = PropertiesService.getScriptProperties();
+  scriptProperties.setProperty(jsonConst.properties.lastReset, new Date().toISOString());
+
+  main();
+
 }
 
 /**

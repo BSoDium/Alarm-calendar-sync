@@ -20,6 +20,6 @@ const jsonSettings = {
   },
   event: {
     summary: "🔔 Wake up",
-    description: "⏰ Rise and shine, it's time to get out of bed !"
+    description: "Come on get your ass up. You've slept enough."
   },
 }
